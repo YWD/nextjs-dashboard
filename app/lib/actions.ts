@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import postgres from "postgres";
 import { redirect } from "next/navigation";
 import { tr } from "zod/v4/locales";
+import { signIn } from "@/auth";
+import { AuthError } from "next-auth";
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
 
@@ -77,15 +79,15 @@ export async function updateInvoice(id: string, formData: FormData) {
  
   try {
     await sql`
-      UPDATE invoices
+      UPDATE invoices 
       SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
       WHERE id = ${id}
     `;
   } catch (error) {
     console.error('Error updating invoice:', error);
-    return {
-      message: 'Database Error: Failed to Update Invoice.',
-    };
+    // return {
+    //   message: 'Database Error: Failed to Update Invoice.',
+    // };
   }
  
   revalidatePath('/dashboard/invoices');
@@ -95,4 +97,23 @@ export async function updateInvoice(id: string, formData: FormData) {
 export async function deleteInvoice(id: string) {
   await sql`DELETE FROM invoices WHERE id = ${id}`;
   revalidatePath('/dashboard/invoices');
+}
+
+export async function authenticate(
+  prevState: string | undefined,
+  formData: FormData,
+) {
+  try {
+    await signIn('credentials', formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return 'Invalid credentials.';
+        default:
+          return 'Something went wrong.';
+      }
+    }
+    throw error;
+  }
 }
